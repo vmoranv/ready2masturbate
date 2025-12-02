@@ -112,12 +112,30 @@ class APIHandler(BaseHTTPRequestHandler):
                                 analysis_data = json.load(f)
                             
                             summary = analysis_data.get('analysis_summary', {})
+                            
+                            # 收集所有标签并计算频率
+                            all_tags = []
+                            frames = analysis_data.get('frames', {})
+                            for frame_data in frames.values():
+                                tags = frame_data.get('tags', [])
+                                all_tags.extend(tags)
+                            
+                            # 统计标签频率并获取前3个最常见标签
+                            tag_counts = {}
+                            for tag in all_tags:
+                                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                            
+                            # 按频率排序并取前3个
+                            top_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+                            top_tags_list = [tag for tag, count in top_tags]
+                            
                             video_info.update({
                                 'nsfw_percentage': summary.get('nsfw_percentage', 0),
                                 'average_nsfw_score': summary.get('average_nsfw_score', 0),
                                 'total_frames': summary.get('total_frames', 0),
                                 'highest_score': summary.get('highest_score_frame', {}).get('score', 0),
-                                'analysis_time': analysis_data.get('video_info', {}).get('analysis_time', '')
+                                'analysis_time': analysis_data.get('video_info', {}).get('analysis_time', ''),
+                                'top_tags': top_tags_list
                             })
                         except Exception as e:
                             print(f"读取分析文件失败 {filename}: {e}")

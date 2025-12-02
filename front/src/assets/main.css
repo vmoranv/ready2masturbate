@@ -1,0 +1,6 @@
+@import './base.css';
+
+/* 
+  Main styles are now handled in App.vue and base.css 
+  to support the full-width Pornhub-style layout.
+*/
