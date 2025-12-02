@@ -62,7 +62,8 @@ class APIHandler(BaseHTTPRequestHandler):
                 return
             elif path == '/api/thumbnail':
                 video_id = query_params.get('id', [None])[0]
-                self.serve_thumbnail(video_id)
+                frame_filename = query_params.get('frame', [None])[0]
+                self.serve_thumbnail(video_id, frame_filename)
                 return
             else:
                 response = {'error': 'API endpoint not found'}
@@ -150,7 +151,8 @@ class APIHandler(BaseHTTPRequestHandler):
                     'nsfw_score': frame_data.get('nsfw_score', 0),
                     'is_nsfw': frame_data.get('is_nsfw', False),
                     'tags': frame_data.get('tags', []),
-                    'filename': frame_data.get('filename', '')
+                    'filename': frame_data.get('filename', ''),
+                    'description': frame_data.get('description', '')
                 })
             
             # 按帧号排序
@@ -230,26 +232,44 @@ class APIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             print(f"Error serving file: {e}")
 
-    def serve_thumbnail(self, video_id: str):
+    def serve_thumbnail(self, video_id: str, frame_filename: str = None):
         """Serve thumbnail for a video"""
         if not video_id:
             self.send_error(400, "Video ID required")
             return
             
         # Try to find a frame image from the analysis results
-        # Assuming frames are saved in a 'frames' subdirectory or similar
-        # For this implementation, we'll try to find the first frame or a specific frame
+        frames_dir = os.path.join(self.output_dir, f"{video_id}_frames")
         
-        # Check if there's a specific thumbnail file
+        # If a specific frame is requested, try to serve it
+        if frame_filename:
+            frame_path = os.path.join(frames_dir, frame_filename)
+            if os.path.exists(frame_path):
+                self.serve_file(frame_path, 'image/jpeg')
+                return
+        
+        # First, check if there's a specific thumbnail file
         thumb_path = os.path.join(self.output_dir, f"{video_id}_thumb.jpg")
         if os.path.exists(thumb_path):
             self.serve_file(thumb_path, 'image/jpeg')
             return
             
+        # If frames directory exists, serve the first frame as thumbnail
+        if os.path.exists(frames_dir):
+            try:
+                # Get all frame files and sort them
+                frame_files = [f for f in os.listdir(frames_dir) if f.endswith('.jpg')]
+                if frame_files:
+                    frame_files.sort()
+                    # Use the first frame as thumbnail
+                    first_frame_path = os.path.join(frames_dir, frame_files[0])
+                    if os.path.exists(first_frame_path):
+                        self.serve_file(first_frame_path, 'image/jpeg')
+                        return
+            except Exception as e:
+                print(f"Error reading frame directory: {e}")
+        
         # Fallback: try to find any frame image for this video
-        # This part depends on how frames are stored. 
-        # If frames are not stored as images, we might need to extract one or return a placeholder.
-        # For now, let's assume we return a 404 if no specific thumbnail exists
         self.send_error(404, "Thumbnail not found")
     
     def log_message(self, format, *args):
