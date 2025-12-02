@@ -9,6 +9,7 @@ import json
 import os
 import base64
 import requests
+import time
 from typing import Dict, Any, Optional
 from datetime import datetime
 from dotenv import load_dotenv
@@ -37,7 +38,7 @@ class FrameAnalyzer:
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
     
-    def _call_vlm_api(self, base64_image: str, prompt: str) -> Optional[Dict[str, Any]]:
+    def _call_vlm_api(self, base64_image: str, prompt: str, max_retries: int = 3) -> Optional[Dict[str, Any]]:
         """调用VLM API"""
         # 构建请求数据
         data = {
@@ -55,32 +56,60 @@ class FrameAnalyzer:
             "max_tokens": 500
         }
         
-        # 发送请求
-        response = requests.post(
-            f"{self.endpoint}/v1/chat/completions",
-            json=data,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"]
-            
-            # 解析JSON结果
+        # 重试机制
+        for attempt in range(max_retries):
             try:
-                return json.loads(content)
-            except json.JSONDecodeError:
-                # 如果直接解析失败，尝试提取JSON部分
-                import re
-                json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                if json_match:
-                    return json.loads(json_match.group())
+                # 发送请求，增加超时时间
+                response = requests.post(
+                    f"{self.endpoint}/v1/chat/completions",
+                    json=data,
+                    timeout=120  # 增加到120秒
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    
+                    # 解析JSON结果
+                    try:
+                        return json.loads(content)
+                    except json.JSONDecodeError:
+                        # 如果直接解析失败，尝试提取JSON部分
+                        import re
+                        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                        if json_match:
+                            return json.loads(json_match.group())
+                        else:
+                            print(f"无法解析JSON响应: {content}")
+                            return None
                 else:
-                    print(f"无法解析JSON响应: {content}")
-                    return None
-        else:
-            print(f"API请求失败: {response.status_code} - {response.text}")
-            return None
+                    print(f"API请求失败: {response.status_code} - {response.text}")
+                    if attempt < max_retries - 1:
+                        print(f"正在重试... ({attempt + 1}/{max_retries})")
+                        time.sleep(2)  # 等待2秒后重试
+                    continue
+                    
+            except requests.exceptions.Timeout:
+                print(f"请求超时 (尝试 {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    print("正在重试...")
+                    time.sleep(3)  # 等待3秒后重试
+                continue
+            except requests.exceptions.ConnectionError:
+                print(f"连接错误 (尝试 {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    print("正在重试...")
+                    time.sleep(3)  # 等待3秒后重试
+                continue
+            except Exception as e:
+                print(f"请求发生错误: {e}")
+                if attempt < max_retries - 1:
+                    print("正在重试...")
+                    time.sleep(3)  # 等待3秒后重试
+                continue
+        
+        print("所有重试均失败")
+        return None
     
     def analyze_image(self, image_path: str) -> Optional[Dict[str, Any]]:
         """分析单张图片"""

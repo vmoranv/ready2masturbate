@@ -144,8 +144,7 @@ def setup_directories():
     
     directories = [
         'video',
-        'analysis_results',
-        'test_frames'
+        'analysis_results'
     ]
     
     for directory in directories:

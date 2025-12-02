@@ -74,8 +74,7 @@ def setup_directories():
     
     directories = [
         'video',
-        'analysis_results',
-        'test_frames'
+        'analysis_results'
     ]
     
     for directory in directories:
@@ -88,9 +87,9 @@ def start_scheduler():
     
     try:
         # 导入并启动调度器
-        from video_scheduler import SchedulerTUI
+        from terminal_scheduler import TerminalTUI
         
-        scheduler = SchedulerTUI()
+        scheduler = TerminalTUI()
         print("✅ 调度器启动成功")
         print("=" * 50)
         print("🎬 视频内容分析系统已启动")
