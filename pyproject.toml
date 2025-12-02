@@ -1,0 +1,43 @@
+[project]
+name = "ready2masturbate"
+version = "1.0.0"
+description = "基于VLM模型的智能视频内容分析系统"
+authors = [
+    {name = "Video Analysis Team"}
+]
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python>=4.5.0",
+    "numpy>=1.19.0,<2.3.0",
+    "requests>=2.25.0",
+    "python-dotenv>=0.19.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.1",
+    "black>=25.11.0",
+    "flake8>=7.3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=9.0.1",
+    "black>=25.11.0",
+    "flake8>=7.3.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["utils", "."]
+include = [
+    "utils/*.py",
+    "utils/*.json",
+    "*.py",
+    "*.json",
+    "*.md",
+    "*.txt"
+]
