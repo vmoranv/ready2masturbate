@@ -254,35 +254,3 @@ Analyze the image and provide the response in the specified JSON format."""
             json.dump(output_data, f, ensure_ascii=False, indent=2)
         
         print(f"分析结果已保存到: {output_file}")
-
-
-def main():
-    """主函数"""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="帧内容分析工具")
-    parser.add_argument("frames_dir", help="帧图片目录路径")
-    parser.add_argument("--output", "-o", help="输出JSON文件路径")
-    
-    args = parser.parse_args()
-    
-    # 检查目录是否存在
-    if not os.path.exists(args.frames_dir):
-        print(f"错误: 目录 '{args.frames_dir}' 不存在")
-        return
-    
-    # 创建分析器并执行分析
-    analyzer = FrameAnalyzer()
-    
-    try:
-        result = analyzer.analyze_frames_directory(args.frames_dir, args.output)
-        print("分析成功完成！")
-        
-    except KeyboardInterrupt:
-        print("\n分析被用户中断")
-    except Exception as e:
-        print(f"分析过程中发生错误: {e}")
-
-
-if __name__ == "__main__":
-    main()

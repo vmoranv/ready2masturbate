@@ -65,28 +65,30 @@ def extract_frames(video_path, output_dir, interval_seconds, prefix="frame"):
         interval_frames = 1
     
     extracted_count = 0
-    current_frame = 0
+    current_frame_idx = 0
     
-    while True:
+    while current_frame_idx < total_frames:
+        # 设置当前帧位置
+        cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_idx)
+        
         ret, frame = cap.read()
         if not ret:
             break
         
         # 计算当前帧的时间戳
-        current_time = current_frame / fps
+        current_time = current_frame_idx / fps
         
-        # 按照间隔提取帧
-        if current_frame % interval_frames == 0:
-            # 格式化时间戳
-            timestamp_str = format_timestamp(current_time)
-            filename = f"{prefix}_{timestamp_str}.jpg"
-            output_path = os.path.join(output_dir, filename)
-            
-            # 保存帧
-            cv2.imwrite(output_path, frame)
-            extracted_count += 1
+        # 格式化时间戳
+        timestamp_str = format_timestamp(current_time)
+        filename = f"{prefix}_{timestamp_str}.jpg"
+        output_path = os.path.join(output_dir, filename)
         
-        current_frame += 1
+        # 保存帧
+        cv2.imwrite(output_path, frame)
+        extracted_count += 1
+        
+        # 跳到下一帧
+        current_frame_idx += interval_frames
     
     # 释放资源
     cap.release()
