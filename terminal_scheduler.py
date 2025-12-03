@@ -7,12 +7,11 @@
 
 import os
 import json
-import sys
-import threading
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import time
+from tqdm import tqdm
 
 from utils.video_frame_extractor import extract_frames
 from utils.frame_analyzer import FrameAnalyzer
@@ -91,16 +90,15 @@ class TerminalScheduler:
         
         # 步骤2: 分析帧内容
         results = {}
-        for i, filename in enumerate(frame_files, 1):
+        for i, filename in enumerate(tqdm(frame_files, desc="🔍 分析帧内容", unit="帧")):
             frame_path = os.path.join(analysis_dir, filename)
-            print(f"⏳ 分析进度: {i}/{len(frame_files)} - {filename}")
             
             analysis = self.analyzer.analyze_image(frame_path)
             if analysis:
                 analysis.update({
                     'filename': filename,
                     'timestamp': self.analyzer._parse_timestamp_from_filename(filename),
-                    'frame_number': i
+                    'frame_number': i + 1
                 })
                 results[filename] = analysis
         
@@ -130,7 +128,7 @@ class TerminalScheduler:
     def start_api_server(self):
         """启动API服务器"""
         try:
-            print(f"🚀 正在启动API服务器...")
+            print("🚀 正在启动API服务器...")
             self.api_server.start()
             print(f"✅ API服务器已启动: http://localhost:{self.api_port}")
             return True
@@ -264,7 +262,7 @@ class TerminalTUI:
                 max_score = result['analysis_summary']['highest_score_frame']['score']
                 print(f"📈 最高NSFW分数: {max_score}")
             else:
-                print(f"📈 最高NSFW分数: N/A")
+                print("📈 最高NSFW分数: N/A")
             print("=" * 60)
             
         except ValueError:
@@ -355,7 +353,7 @@ class TerminalTUI:
                     max_score = data['analysis_summary']['highest_score_frame']['score']
                     print(f"  📈 最高分数: {max_score}")
                 else:
-                    print(f"  📈 最高分数: N/A")
+                    print("  📈 最高分数: N/A")
                 
                 # 计算最低分数
                 min_score = 100

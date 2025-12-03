@@ -6,7 +6,7 @@ API服务器 - 为前端提供视频分析数据接口
 
 import os
 import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import socketserver
 import threading
@@ -77,7 +77,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 try:
                     error_response = {'error': str(e)}
                     self.wfile.write(json.dumps(error_response, ensure_ascii=False).encode('utf-8'))
-                except:
+                except Exception:
                     pass
     
     def get_videos(self) -> dict:

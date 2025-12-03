@@ -5,11 +5,6 @@
 """
 
 import os
-import sys
-import subprocess
-import threading
-import time
-from pathlib import Path
 
 def check_dependencies():
     """检查依赖是否安装"""
@@ -28,13 +23,25 @@ def check_dependencies():
     for package in required_packages:
         try:
             if package == 'tkinter':
-                import tkinter
+                import importlib.util
+                spec = importlib.util.find_spec('tkinter')
+                if spec is None:
+                    raise ImportError
             elif package == 'opencv-python':
-                import cv2
+                import importlib.util
+                spec = importlib.util.find_spec('cv2')
+                if spec is None:
+                    raise ImportError
             elif package == 'python-dotenv':
-                import dotenv
+                import importlib.util
+                spec = importlib.util.find_spec('dotenv')
+                if spec is None:
+                    raise ImportError
             elif package == 'requests':
-                import requests
+                import importlib.util
+                spec = importlib.util.find_spec('requests')
+                if spec is None:
+                    raise ImportError
             else:
                 __import__(package.replace('-', '_'))
         except ImportError:
@@ -61,7 +68,7 @@ def check_lm_studio():
         if response.status_code == 200:
             print("✅ LM Studio正在运行")
             return True
-    except:
+    except Exception:
         pass
     
     print("⚠️  LM Studio未运行或无法访问")

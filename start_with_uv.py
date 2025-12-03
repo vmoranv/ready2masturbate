@@ -5,10 +5,7 @@
 """
 
 import os
-import sys
 import subprocess
-import threading
-import time
 from pathlib import Path
 
 def check_uv_installed():
@@ -53,7 +50,7 @@ def setup_virtual_environment():
         if result.returncode == 0:
             print("✅ 项目依赖已安装")
             return True
-    except:
+    except Exception:
         pass
     
     # 安装依赖
@@ -87,7 +84,7 @@ def check_lm_studio():
                 print(f"✅ 检测到端口 {port} 开放")
                 lm_studio_port = port
                 break
-        except:
+        except Exception:
             continue
     
     if not lm_studio_port:
@@ -102,35 +99,47 @@ def check_lm_studio():
             else:
                 print("⚠️  未检测到LM Studio进程")
                 return False
-        except:
+        except Exception:
             print("⚠️  无法检查进程列表")
             return False
     
     # 端口开放，尝试获取模型信息
     try:
-        # 直接使用requests而不是通过uv运行，避免额外的复杂性
-        import requests
-        response = requests.get(f"http://127.0.0.1:{lm_studio_port}/v1/models", timeout=5)
-        
-        if response.status_code == 200:
-            models = response.json().get("data", [])
-            if models:
-                # 检查是否有VLM模型
-                vl_models = [m for m in models if "vl" in m.get("id", "").lower() or "vision" in m.get("id", "").lower()]
-                if vl_models:
-                    print(f"✅ LM Studio正在运行(端口:{lm_studio_port})，检测到VLM模型: {vl_models[0]['id']}")
-                    return True
-                else:
-                    # 即使没有VLM模型，只要有模型就算运行
-                    print(f"✅ LM Studio正在运行(端口:{lm_studio_port})，检测到模型: {models[0]['id']}")
-                    print("ℹ️  建议加载VLM模型以获得最佳分析效果")
-                    return True
+        # 使用uv运行requests来检查LM Studio API
+        result = subprocess.run([
+            'uv', 'run', 'python', '-c',
+            f'''
+import requests
+import json
+try:
+    response = requests.get("http://127.0.0.1:{lm_studio_port}/v1/models", timeout=5)
+    if response.status_code == 200:
+        models = response.json().get("data", [])
+        if models:
+            vl_models = [m for m in models if "vl" in m.get("id", "").lower() or "vision" in m.get("id", "").lower()]
+            if vl_models:
+                print(f"✅ LM Studio正在运行(端口:{lm_studio_port})，检测到VLM模型: {{vl_models[0]['id']}}")
             else:
-                print(f"⚠️  LM Studio运行中(端口:{lm_studio_port})，但未加载任何模型")
-                return False
+                print(f"✅ LM Studio正在运行(端口:{lm_studio_port})，检测到模型: {{models[0]['id']}}")
+                print("ℹ️  建议加载VLM模型以获得最佳分析效果")
         else:
-            print(f"⚠️  LM Studio响应异常，状态码: {response.status_code}")
-            return False
+            print(f"⚠️  LM Studio运行中(端口:{lm_studio_port})，但未加载任何模型")
+    else:
+        print(f"⚠️  LM Studio响应异常，状态码: {{response.status_code}}")
+except Exception as e:
+    print(f"⚠️  LM Studio API检测失败: {{e}}")
+    print(f"ℹ️  端口 {lm_studio_port} 开放，LM Studio可能正在启动中")
+'''
+        ], capture_output=True, text=True, timeout=10)
+        
+        # 输出uv运行的结果
+        if result.stdout:
+            print(result.stdout.strip())
+        if result.stderr and "error" in result.stderr.lower():
+            print(f"⚠️  API检查时出现错误: {result.stderr.strip()}")
+            
+        # 如果端口开放，就算部分成功
+        return True
             
     except Exception as e:
         print(f"⚠️  LM Studio API检测失败: {e}")
