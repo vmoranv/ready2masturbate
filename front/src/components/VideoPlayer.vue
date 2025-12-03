@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, computed, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -49,6 +49,14 @@ const volume = ref(1)
 const showControls = ref(true)
 let controlsTimeout: number | null = null
 
+// NSFW Control State
+type NsfwMode = 'normal' | 'skip' | 'only'
+const nsfwMode = ref<NsfwMode>('normal')
+const NSFW_THRESHOLD = 60
+
+// Tag Analysis State
+const selectedTag = ref<string | null>(null)
+
 // 计算属性
 const hasAnalysis = computed(() => props.analysisData !== null)
 
@@ -67,6 +75,24 @@ const selectRecommendedVideo = (video: Video) => {
   emit('select-video', video)
 }
 
+// Tag Statistics
+const tagStats = computed(() => {
+  if (!props.analysisData?.chart_data) return []
+  
+  const stats: Record<string, number> = {}
+  props.analysisData.chart_data.forEach(frame => {
+    if (frame.tags) {
+      frame.tags.forEach(tag => {
+        stats[tag] = (stats[tag] || 0) + 1
+      })
+    }
+  })
+  
+  return Object.entries(stats)
+    .sort(([, a], [, b]) => b - a)
+    .map(([tag, count]) => ({ tag, count }))
+})
+
 // Chart Data (Simplified for dark theme)
 const chartData = computed(() => {
   if (!hasAnalysis.value || !props.analysisData?.chart_data) {
@@ -76,6 +102,21 @@ const chartData = computed(() => {
   const frames = props.analysisData.chart_data
   const labels = frames.map(frame => frame.timestamp)
   const scores = frames.map(frame => frame.nsfw_score)
+  
+  // Determine point colors/sizes based on selected tag
+  const pointBackgroundColors = frames.map(frame => {
+    if (selectedTag.value && frame.tags?.includes(selectedTag.value)) {
+      return '#ff4444' // Highlight color
+    }
+    return '#ffa31a' // Default color
+  })
+
+  const pointRadiuses = frames.map(frame => {
+    if (selectedTag.value && frame.tags?.includes(selectedTag.value)) {
+      return 6 // Highlight size
+    }
+    return 0 // Default size (hidden unless hovered)
+  })
 
   return {
     labels,
@@ -87,9 +128,9 @@ const chartData = computed(() => {
         backgroundColor: 'rgba(255, 163, 26, 0.1)',
         fill: true,
         tension: 0.4,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        pointBackgroundColor: '#ffa31a'
+        pointRadius: pointRadiuses,
+        pointHoverRadius: 6,
+        pointBackgroundColor: pointBackgroundColors
       }
     ]
   }
@@ -209,9 +250,49 @@ const togglePlay = () => {
   isPlaying.value = !isPlaying.value
 }
 
+// Helper to convert timestamp string to seconds
+const timeToSeconds = (timestamp: string) => {
+  const parts = timestamp.split(':').map(Number)
+  return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0)
+}
+
 const handleTimeUpdate = () => {
   if (videoRef.value) {
-    currentTime.value = videoRef.value.currentTime
+    const current = videoRef.value.currentTime
+    currentTime.value = current
+
+    // NSFW Logic
+    if (nsfwMode.value !== 'normal' && props.analysisData?.chart_data) {
+      const frames = props.analysisData.chart_data
+      // Find current frame index
+      const nextIndex = frames.findIndex(f => timeToSeconds(f.timestamp) > current)
+      const currentIndex = nextIndex === -1 ? frames.length - 1 : nextIndex - 1
+      
+      if (currentIndex >= 0) {
+        const currentFrame = frames[currentIndex]
+        
+        if (currentFrame) {
+          const isNsfw = currentFrame.nsfw_score > NSFW_THRESHOLD
+
+          if (nsfwMode.value === 'skip' && isNsfw) {
+            // Skip to next non-NSFW frame
+            const nextSafeFrame = frames.slice(currentIndex + 1).find(f => f.nsfw_score <= NSFW_THRESHOLD)
+            if (nextSafeFrame) {
+              videoRef.value.currentTime = timeToSeconds(nextSafeFrame.timestamp)
+            } else {
+              // No more safe frames, maybe pause or go to end?
+              // For now, let it play or maybe pause
+            }
+          } else if (nsfwMode.value === 'only' && !isNsfw) {
+            // Skip to next NSFW frame
+            const nextNsfwFrame = frames.slice(currentIndex + 1).find(f => f.nsfw_score > NSFW_THRESHOLD)
+            if (nextNsfwFrame) {
+              videoRef.value.currentTime = timeToSeconds(nextNsfwFrame.timestamp)
+            }
+          }
+        }
+      }
+    }
   }
 }
 
@@ -256,6 +337,22 @@ const formatTime = (seconds: number) => {
   const s = Math.floor(seconds % 60)
   if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+// Toggle NSFW Mode
+const toggleNsfwMode = () => {
+  if (nsfwMode.value === 'normal') nsfwMode.value = 'skip'
+  else if (nsfwMode.value === 'skip') nsfwMode.value = 'only'
+  else nsfwMode.value = 'normal'
+}
+
+// Toggle Tag Selection
+const toggleTag = (tag: string) => {
+  if (selectedTag.value === tag) {
+    selectedTag.value = null
+  } else {
+    selectedTag.value = tag
+  }
 }
 
 onMounted(() => {
@@ -311,6 +408,15 @@ onUnmounted(() => {
             </div>
             
             <div class="right-controls">
+              <button 
+                class="control-btn nsfw-btn" 
+                @click="toggleNsfwMode"
+                :title="`Current Mode: ${nsfwMode.toUpperCase()}`"
+              >
+                <span v-if="nsfwMode === 'normal'">🛡️ OFF</span>
+                <span v-else-if="nsfwMode === 'skip'">🛡️ SKIP</span>
+                <span v-else>🛡️ ONLY</span>
+              </button>
               <button class="control-btn">HD</button>
               <button class="control-btn">⛶</button>
             </div>
@@ -345,9 +451,23 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Analysis Chart (Subtle) -->
+      <!-- Analysis Widget -->
       <div v-if="hasAnalysis" class="analysis-widget">
         <h3>Content Intensity Analysis</h3>
+        
+        <!-- Tag Cloud -->
+        <div class="tag-cloud" v-if="tagStats.length > 0">
+          <div 
+            v-for="stat in tagStats" 
+            :key="stat.tag"
+            class="tag-chip"
+            :class="{ active: selectedTag === stat.tag }"
+            @click="toggleTag(stat.tag)"
+          >
+            {{ stat.tag }} <span class="count">{{ stat.count }}</span>
+          </div>
+        </div>
+
         <div class="chart-wrapper">
           <Line :data="chartData" :options="chartOptions" />
         </div>
@@ -381,7 +501,7 @@ onUnmounted(() => {
             <div class="rec-title" :title="video.filename">{{ video.filename }}</div>
             <div class="rec-meta">
               <span v-if="video.average_nsfw_score" class="rec-rating">
-                {{ (video.average_nsfw_score * 100).toFixed(0) }}% match
+                {{ (video.average_nsfw_score).toFixed(0) }}% match
               </span>
               <span v-else>Analyzed</span>
             </div>
@@ -494,6 +614,18 @@ onUnmounted(() => {
   width: 30px;
 }
 
+.nsfw-btn {
+  font-size: 12px;
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.nsfw-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .time-display {
   color: white;
   font-size: 13px;
@@ -578,8 +710,48 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.tag-chip {
+  background: #333;
+  color: #ccc;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.tag-chip:hover {
+  background: #444;
+  color: white;
+}
+
+.tag-chip.active {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+  border-color: #ff4444;
+}
+
+.tag-chip .count {
+  opacity: 0.6;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
 .chart-wrapper {
   height: 150px;
+  cursor: pointer;
+}
+
+.chart-wrapper:hover {
+  opacity: 0.9;
 }
 
 /* Sidebar */
@@ -748,14 +920,5 @@ onUnmounted(() => {
   max-height: 60px;
   overflow-y: auto;
   word-wrap: break-word;
-}
-
-/* Chart cursor pointer */
-.chart-wrapper {
-  cursor: pointer;
-}
-
-.chart-wrapper:hover {
-  opacity: 0.9;
 }
 </style>

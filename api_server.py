@@ -71,7 +71,7 @@ class APIHandler(BaseHTTPRequestHandler):
             
         except Exception as e:
             # 如果是BrokenPipeError (客户端断开连接)，忽略
-            if not isinstance(e, BrokenPipeError):
+            if not isinstance(e, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
                 print(f"Error handling request: {e}")
                 # 尝试发送错误响应，如果头部还没发送
                 try:
@@ -245,7 +245,8 @@ class APIHandler(BaseHTTPRequestHandler):
                         break
                     self.wfile.write(chunk)
                     remaining -= len(chunk)
-        except BrokenPipeError:
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # Client disconnected, ignore
             pass
         except Exception as e:
             print(f"Error serving file: {e}")
